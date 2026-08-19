@@ -8,6 +8,9 @@ For every `GET /`, the reader fetches the current counter from the separate
 Ping-pong Pod through `http://ping-pong-svc/pings`. The stable Service name is
 resolved by Kubernetes DNS; the two applications no longer share a volume.
 
+The `log-output-config` ConfigMap provides the `MESSAGE` environment variable
+and an `information.txt` file mounted read-only at `/usr/src/app/config`.
+
 ## Run locally
 
 Python 3.11 or newer is recommended. Start all three processes in separate
@@ -25,6 +28,8 @@ LOG_FILE="$PWD/files/log.txt" python3 writer/main.py
 ```bash
 LOG_FILE="$PWD/files/log.txt" \
 PING_PONG_URL="http://localhost:3001/pings" \
+INFORMATION_FILE="$PWD/information.txt" \
+MESSAGE="hello world" \
 PORT=3000 python3 reader/main.py
 ```
 
@@ -36,12 +41,12 @@ Run these commands from the repository root. They assume that Docker, kubectl,
 k3d, and a running cluster named `k3s-default` are available.
 
 ```bash
-docker build -f log_output/Dockerfile.writer -t log-output-writer:2.1 ./log_output
-docker build -f log_output/Dockerfile.reader -t log-output-reader:2.1 ./log_output
+docker build -f log_output/Dockerfile.writer -t log-output-writer:2.5 ./log_output
+docker build -f log_output/Dockerfile.reader -t log-output-reader:2.5 ./log_output
 docker build -t ping-pong:2.1 ./ping_pong
 k3d image import \
-  log-output-writer:2.1 \
-  log-output-reader:2.1 \
+  log-output-writer:2.5 \
+  log-output-reader:2.5 \
   ping-pong:2.1 \
   --cluster k3s-default
 ```
@@ -53,7 +58,7 @@ project back to Log output:
 kubectl apply -f namespaces/exercises.yaml
 kubectl apply -f ping_pong/manifests/
 kubectl apply -f log_output/manifests/
-kubectl delete ingress todo-app-ingress -n default --ignore-not-found
+kubectl delete ingress todo-app-ingress -n project --ignore-not-found
 kubectl apply -f log_output/manifests/ingress.yaml
 kubectl rollout status deployment/ping-pong -n exercises
 kubectl rollout status deployment/log-output -n exercises
@@ -69,6 +74,8 @@ curl http://localhost:8081/
 The Log output response contains data received from both Pods:
 
 ```text
+file content: this text is from file
+env variable: MESSAGE=hello world
 2026-05-18T12:15:17.705Z: 8523ecb1-c716-4cb6-a044-b9e83bb98e43.
 Ping / Pongs: 3
 ```
