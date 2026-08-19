@@ -14,6 +14,11 @@ no deployment-specific ports, URLs, paths, cache settings, or request limits.
 The database password is read from `todo-postgres-secret` and is never stored in
 the repository.
 
+The Todo generator runs as an hourly CronJob. It follows the redirect from
+Wikipedia's random article endpoint and creates a `Read <URL>` item through the
+internal Todo backend Service.
+
 Application code, Kubernetes manifests, and detailed instructions are in
-[`todo-app`](todo-app/) and [`todo-backend`](todo-backend/). Cluster-level
-storage and Ingress resources are in [`manifests`](manifests/).
+[`todo-app`](todo-app/), [`todo-backend`](todo-backend/), and
+[`todo-generator`](todo-generator/). Cluster-level storage, configuration, and
+Ingress resources are in [`manifests`](manifests/).

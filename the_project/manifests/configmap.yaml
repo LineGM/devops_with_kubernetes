@@ -24,3 +24,8 @@ data:
   DB_CONNECT_TIMEOUT_SECONDS: "5"
   DB_CONNECT_RETRIES: "30"
   DB_CONNECT_RETRY_DELAY_SECONDS: "2"
+  WIKIPEDIA_RANDOM_URL: https://en.wikipedia.org/wiki/Special:Random
+  TODO_BACKEND_URL: http://todo-backend-svc/todos
+  TODO_REMINDER_PREFIX: "Read "
+  HTTP_TIMEOUT_SECONDS: "15"
+  MAX_RANDOM_ATTEMPTS: "10"

@@ -1,0 +1,54 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: todo-generator
+  namespace: project
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        metadata:
+          labels:
+            app: todo-generator
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: todo-generator
+              image: todo-generator:2.9
+              imagePullPolicy: Never
+              env:
+                - name: WIKIPEDIA_RANDOM_URL
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-project-config
+                      key: WIKIPEDIA_RANDOM_URL
+                - name: TODO_BACKEND_URL
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-project-config
+                      key: TODO_BACKEND_URL
+                - name: TODO_REMINDER_PREFIX
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-project-config
+                      key: TODO_REMINDER_PREFIX
+                - name: MAX_TODO_LENGTH
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-project-config
+                      key: MAX_TODO_LENGTH
+                - name: HTTP_TIMEOUT_SECONDS
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-project-config
+                      key: HTTP_TIMEOUT_SECONDS
+                - name: MAX_RANDOM_ATTEMPTS
+                  valueFrom:
+                    configMapKeyRef:
+                      name: todo-project-config
+                      key: MAX_RANDOM_ATTEMPTS
