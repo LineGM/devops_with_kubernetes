@@ -12,3 +12,4 @@ Exercise submissions for the [DevOps with Kubernetes](https://devopswithkubernet
 - [1.6](https://github.com/LineGM/devops_with_kubernetes/tree/1.6/the_project): The project, step 4
 - [1.7](https://github.com/LineGM/devops_with_kubernetes/tree/1.7/log_output): External access with Ingress
 - [1.8](https://github.com/LineGM/devops_with_kubernetes/tree/1.8/the_project): The project, step 5
+- [1.9](https://github.com/LineGM/devops_with_kubernetes/tree/1.9/ping_pong): More services

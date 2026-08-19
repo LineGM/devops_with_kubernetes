@@ -24,13 +24,11 @@ it with `Ctrl+C`.
 
 ## Deploy to a local k3d cluster
 
-The commands below assume that Docker, kubectl, and k3d are available. Create a
-cluster with host port `8081` mapped to the load balancer for Ingress access:
+The commands below assume that Docker, kubectl, and k3d are available. A minimal
+local cluster for the application can be created with:
 
 ```bash
-k3d cluster create \
-  --port 8081:80@loadbalancer \
-  --agents 2
+k3d cluster create --agents 2
 ```
 
 The application code has not changed since exercise 1.6, so its existing image
@@ -41,7 +39,7 @@ docker build -t todo-app:1.6 .
 k3d image import todo-app:1.6 --cluster k3s-default
 ```
 
-Create the Deployment, ClusterIP Service, and Ingress, then wait for the Pod:
+Create the Deployment and ClusterIP Service, then wait for the Pod:
 
 ```bash
 kubectl apply -f manifests/
@@ -54,9 +52,9 @@ Confirm that the configured port was used:
 kubectl logs deployment/todo-app
 ```
 
-Open <http://localhost:8081> in a browser. The request travels through the k3d
-host-port mapping to Traefik and the Ingress, then through the ClusterIP Service
-to container port `3000`.
+The project's Ingress from exercise 1.8 is removed in exercise 1.9 while routing
+is introduced for Log output and ping-pong. The application remains available
+inside the cluster through `todo-app-svc` and directly through port forwarding.
 
 For debugging, local port `3003` can still be forwarded directly to the
 Deployment:
@@ -68,7 +66,7 @@ kubectl port-forward deployment/todo-app 3003:3000
 Open <http://localhost:3003> in a browser. Stop port forwarding with `Ctrl+C`.
 Port forwarding is intended only for local development and debugging.
 
-Remove the Deployment, Service, and Ingress when they are no longer needed:
+Remove the Deployment and Service when they are no longer needed:
 
 ```bash
 kubectl delete -f manifests/
