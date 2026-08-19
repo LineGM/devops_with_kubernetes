@@ -22,8 +22,8 @@ named `k3s-default` are available.
 Build the image and import it into the cluster:
 
 ```bash
-docker build -t log-output:1.1 .
-k3d image import log-output:1.1 --cluster k3s-default
+docker build -t log-output:1.3 .
+k3d image import log-output:1.3 --cluster k3s-default
 ```
 
 Create the Deployment and wait for its Pod:
