@@ -15,3 +15,4 @@ Exercise submissions for the [DevOps with Kubernetes](https://devopswithkubernet
 - [1.9](https://github.com/LineGM/devops_with_kubernetes/tree/1.9/ping_pong): More services
 - [1.10](https://github.com/LineGM/devops_with_kubernetes/tree/1.10/log_output): Even more services
 - [1.11](https://github.com/LineGM/devops_with_kubernetes/tree/1.11/log_output): Persisting data
+- [1.12](https://github.com/LineGM/devops_with_kubernetes/tree/1.12/the_project): The project, step 6

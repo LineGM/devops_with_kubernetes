@@ -12,14 +12,29 @@ spec:
       labels:
         app: todo-app
     spec:
+      securityContext:
+        fsGroup: 1000
+      volumes:
+        - name: image-cache
+          persistentVolumeClaim:
+            claimName: todo-image-claim
       containers:
         - name: todo-app
-          image: todo-app:1.6
+          image: todo-app:1.12
           imagePullPolicy: Never
           env:
             - name: PORT
               value: "3000"
+            - name: IMAGE_URL
+              value: https://picsum.photos/1200
+            - name: IMAGE_CACHE_FILE
+              value: /usr/src/app/files/image.jpg
+            - name: IMAGE_CACHE_MAX_AGE_SECONDS
+              value: "600"
           ports:
             - name: http
               containerPort: 3000
               protocol: TCP
+          volumeMounts:
+            - name: image-cache
+              mountPath: /usr/src/app/files
