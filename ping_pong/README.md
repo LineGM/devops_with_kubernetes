@@ -1,8 +1,9 @@
 # Ping-pong
 
-An HTTP server that responds to `GET /pingpong` with `pong N`, where `N` is an
-in-memory counter. The first response is `pong 0`; each successful request
-increments the counter. The value resets when the process restarts.
+An HTTP server that responds to `GET /pingpong` with `pong N`, where `N` is a
+counter stored on a PersistentVolume shared with Log output. The first response
+on an empty volume is `pong 0`; each successful request increments the persisted
+value.
 
 ## Run locally
 
@@ -10,7 +11,8 @@ Python 3.11 or newer is recommended. The application has no third-party
 dependencies.
 
 ```bash
-PORT=8080 python3 app/main.py
+mkdir -p files
+COUNTER_FILE="$PWD/files/ping-pong.txt" PORT=8080 python3 app/main.py
 curl http://localhost:8080/pingpong
 ```
 
@@ -22,8 +24,10 @@ Run these commands from the repository root. They assume that Docker, kubectl,
 k3d, and a running cluster named `k3s-default` are available.
 
 ```bash
-docker build -t ping-pong:1.9 ./ping_pong
-k3d image import ping-pong:1.9 --cluster k3s-default
+docker build -t ping-pong:1.11 ./ping_pong
+k3d image import ping-pong:1.11 --cluster k3s-default
+docker exec k3d-k3s-default-agent-0 mkdir -p /tmp/kube
+kubectl apply -f storage/
 kubectl apply -f ping_pong/manifests/
 kubectl apply -f log_output/manifests/
 kubectl rollout status deployment/ping-pong

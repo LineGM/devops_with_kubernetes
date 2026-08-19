@@ -1,12 +1,14 @@
-"""HTTP server with an in-memory ping-pong request counter."""
+"""HTTP server with a file-backed ping-pong request counter."""
 
 import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import urlsplit
 
 
 DEFAULT_PORT = 3000
+DEFAULT_COUNTER_FILE = "/usr/src/app/files/ping-pong.txt"
 
 
 def configured_port() -> int:
@@ -25,17 +27,23 @@ def configured_port() -> int:
 
 
 class PingPongRequestHandler(BaseHTTPRequestHandler):
-    """Respond to /pingpong and count successful requests in memory."""
+    """Respond to /pingpong and persist the successful request count."""
 
-    counter = 0
+    counter_file = Path(DEFAULT_COUNTER_FILE)
     counter_lock = threading.Lock()
 
     @classmethod
     def next_response(cls) -> bytes:
         """Return the current counter and increment it atomically."""
         with cls.counter_lock:
-            value = cls.counter
-            cls.counter += 1
+            try:
+                value = int(cls.counter_file.read_text(encoding="utf-8").strip())
+            except (FileNotFoundError, ValueError):
+                value = 0
+
+            temporary_file = cls.counter_file.with_name(f".{cls.counter_file.name}.tmp")
+            temporary_file.write_text(f"{value + 1}\n", encoding="utf-8")
+            temporary_file.replace(cls.counter_file)
         return f"pong {value}\n".encode()
 
     def do_GET(self) -> None:
@@ -57,6 +65,10 @@ class PingPongRequestHandler(BaseHTTPRequestHandler):
 
 def main() -> None:
     port = configured_port()
+    PingPongRequestHandler.counter_file = Path(
+        os.getenv("COUNTER_FILE", DEFAULT_COUNTER_FILE)
+    )
+    PingPongRequestHandler.counter_file.parent.mkdir(parents=True, exist_ok=True)
     server = ThreadingHTTPServer(("0.0.0.0", port), PingPongRequestHandler)
     print(f"Server started in port {port}", flush=True)
     try:

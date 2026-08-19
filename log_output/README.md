@@ -1,10 +1,10 @@
 # Log output
 
 Log output runs as two containers in one Pod. The writer generates a UUID once
-at startup and appends that value with a fresh UTC timestamp to a shared file
-every five seconds. The reader serves the current file contents over HTTP. An
-`emptyDir` volume makes the file visible to both containers for the lifetime of
-the Pod.
+at startup and stores that value with a fresh UTC timestamp in a shared file
+every five seconds. The reader combines this status with the persistent
+ping-pong request count and serves both over HTTP. A PersistentVolumeClaim makes
+the files visible to both applications and preserves them across Pod restarts.
 
 ## Run locally
 
@@ -18,7 +18,9 @@ LOG_FILE="$PWD/files/log.txt" python3 writer/main.py
 ```
 
 ```bash
-LOG_FILE="$PWD/files/log.txt" PORT=3000 python3 reader/main.py
+LOG_FILE="$PWD/files/log.txt" \
+COUNTER_FILE="$PWD/files/ping-pong.txt" \
+PORT=3000 python3 reader/main.py
 ```
 
 Open <http://localhost:3000> and stop both processes with `Ctrl+C`.
@@ -31,18 +33,20 @@ named `k3s-default` are available.
 Build both images and import them into the cluster:
 
 ```bash
-docker build -f Dockerfile.writer -t log-output-writer:1.10 .
-docker build -f Dockerfile.reader -t log-output-reader:1.10 .
+docker build -f Dockerfile.writer -t log-output-writer:1.11 .
+docker build -f Dockerfile.reader -t log-output-reader:1.11 .
 k3d image import \
-  log-output-writer:1.10 \
-  log-output-reader:1.10 \
+  log-output-writer:1.11 \
+  log-output-reader:1.11 \
   --cluster k3s-default
 ```
 
-Create the Deployment, ClusterIP Service, and shared Ingress, then wait for the
-Pod:
+Create the backing node directory and storage resources before applying the
+application manifests:
 
 ```bash
+docker exec k3d-k3s-default-agent-0 mkdir -p /tmp/kube
+kubectl apply -f ../storage/
 kubectl apply -f manifests/
 kubectl rollout status deployment/log-output
 ```
@@ -54,12 +58,11 @@ kubectl logs -f deployment/log-output -c log-writer
 kubectl logs -f deployment/log-output -c log-reader
 ```
 
-The output should look like this; the UUID remains unchanged until the
-container restarts:
+The HTTP output includes the latest writer status and persisted ping-pong count:
 
 ```text
-2020-03-30T12:15:17.705Z: 8523ecb1-c716-4cb6-a044-b9e83bb98e43
-2020-03-30T12:15:22.705Z: 8523ecb1-c716-4cb6-a044-b9e83bb98e43
+2020-03-30T12:15:17.705Z: 8523ecb1-c716-4cb6-a044-b9e83bb98e43.
+Ping / Pongs: 3
 ```
 
 With host port `8081` mapped to the k3d load balancer's port `80`, open

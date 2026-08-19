@@ -12,14 +12,25 @@ spec:
       labels:
         app: ping-pong
     spec:
+      securityContext:
+        fsGroup: 1000
+      volumes:
+        - name: shared-data
+          persistentVolumeClaim:
+            claimName: shared-data-claim
       containers:
         - name: ping-pong
-          image: ping-pong:1.9
+          image: ping-pong:1.11
           imagePullPolicy: Never
           env:
             - name: PORT
               value: "3000"
+            - name: COUNTER_FILE
+              value: /usr/src/app/files/ping-pong.txt
           ports:
             - name: http
               containerPort: 3000
               protocol: TCP
+          volumeMounts:
+            - name: shared-data
+              mountPath: /usr/src/app/files
