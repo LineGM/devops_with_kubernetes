@@ -1,16 +1,21 @@
 # Log output
 
-Log output runs as two containers in one Pod. The writer generates a UUID once
-at startup and stores that value with a fresh UTC timestamp in a shared file
-every five seconds. The reader combines this status with the persistent
-ping-pong request count and serves both over HTTP. A PersistentVolumeClaim makes
-the files visible to both applications and preserves them across Pod restarts.
+Log output runs as two containers in one Pod. The writer creates a UUID at
+startup and stores it with a fresh UTC timestamp every five seconds. An
+`emptyDir` shares that file only between the writer and reader containers.
+
+For every `GET /`, the reader fetches the current counter from the separate
+Ping-pong Pod through `http://ping-pong-svc/pings`. The stable Service name is
+resolved by Kubernetes DNS; the two applications no longer share a volume.
 
 ## Run locally
 
-Python 3.11 or newer is recommended. The applications have no third-party
-dependencies. Start the writer and reader in separate terminals with the same
-file path:
+Python 3.11 or newer is recommended. Start all three processes in separate
+terminals:
+
+```bash
+PORT=3001 python3 ../ping_pong/app/main.py
+```
 
 ```bash
 mkdir -p files
@@ -19,61 +24,58 @@ LOG_FILE="$PWD/files/log.txt" python3 writer/main.py
 
 ```bash
 LOG_FILE="$PWD/files/log.txt" \
-COUNTER_FILE="$PWD/files/ping-pong.txt" \
+PING_PONG_URL="http://localhost:3001/pings" \
 PORT=3000 python3 reader/main.py
 ```
 
-Open <http://localhost:3000> and stop both processes with `Ctrl+C`.
+Open <http://localhost:3000> and stop the processes with `Ctrl+C`.
 
 ## Deploy to a local k3d cluster
 
-The commands below assume that Docker, kubectl, k3d, and a running k3d cluster
-named `k3s-default` are available.
-
-Build both images and import them into the cluster:
+Run these commands from the repository root. They assume that Docker, kubectl,
+k3d, and a running cluster named `k3s-default` are available.
 
 ```bash
-docker build -f Dockerfile.writer -t log-output-writer:1.11 .
-docker build -f Dockerfile.reader -t log-output-reader:1.11 .
+docker build -f log_output/Dockerfile.writer -t log-output-writer:2.1 ./log_output
+docker build -f log_output/Dockerfile.reader -t log-output-reader:2.1 ./log_output
+docker build -t ping-pong:2.1 ./ping_pong
 k3d image import \
-  log-output-writer:1.11 \
-  log-output-reader:1.11 \
+  log-output-writer:2.1 \
+  log-output-reader:2.1 \
+  ping-pong:2.1 \
   --cluster k3s-default
 ```
 
-Create the backing node directory and storage resources before applying the
-application manifests:
+Apply both applications and switch the catch-all Ingress from the course
+project back to Log output:
 
 ```bash
-docker exec k3d-k3s-default-agent-0 mkdir -p /tmp/kube
-kubectl apply -f ../storage/
-kubectl apply -f manifests/
+kubectl apply -f ping_pong/manifests/
+kubectl apply -f log_output/manifests/
+kubectl delete ingress todo-app-ingress --ignore-not-found
+kubectl apply -f log_output/manifests/ingress.yaml
+kubectl rollout status deployment/ping-pong
 kubectl rollout status deployment/log-output
 ```
 
-Confirm that the application is running:
+Test the public endpoints through the shared Ingress:
 
 ```bash
-kubectl logs -f deployment/log-output -c log-writer
-kubectl logs -f deployment/log-output -c log-reader
+curl http://localhost:8081/pingpong
+curl http://localhost:8081/
 ```
 
-The HTTP output includes the latest writer status and persisted ping-pong count:
+The Log output response contains data received from both Pods:
 
 ```text
-2020-03-30T12:15:17.705Z: 8523ecb1-c716-4cb6-a044-b9e83bb98e43.
+2026-05-18T12:15:17.705Z: 8523ecb1-c716-4cb6-a044-b9e83bb98e43.
 Ping / Pongs: 3
 ```
 
-With host port `8081` mapped to the k3d load balancer's port `80`, open
-<http://localhost:8081> to request Log output status. The same Ingress routes
-<http://localhost:8081/pingpong> to the ping-pong application.
-
-Remove all application resources when they are no longer needed:
+The internal endpoint can be tested from the reader container using the
+Service's DNS name:
 
 ```bash
-kubectl delete -f manifests/
+kubectl exec deployment/log-output -c log-reader -- \
+  python -c "from urllib.request import urlopen; print(urlopen('http://ping-pong-svc/pings').read().decode())"
 ```
-
-If the cluster has a different name, replace `k3s-default` in the import
-command. You can list cluster names with `k3d cluster list`.

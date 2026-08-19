@@ -15,34 +15,33 @@ spec:
       securityContext:
         fsGroup: 1000
       volumes:
-        - name: shared-data
-          persistentVolumeClaim:
-            claimName: shared-data-claim
+        - name: shared-log
+          emptyDir: {}
       containers:
         - name: log-writer
-          image: log-output-writer:1.11
+          image: log-output-writer:2.1
           imagePullPolicy: Never
           env:
             - name: LOG_FILE
               value: /usr/src/app/files/log.txt
           volumeMounts:
-            - name: shared-data
+            - name: shared-log
               mountPath: /usr/src/app/files
         - name: log-reader
-          image: log-output-reader:1.11
+          image: log-output-reader:2.1
           imagePullPolicy: Never
           env:
             - name: PORT
               value: "3000"
             - name: LOG_FILE
               value: /usr/src/app/files/log.txt
-            - name: COUNTER_FILE
-              value: /usr/src/app/files/ping-pong.txt
+            - name: PING_PONG_URL
+              value: http://ping-pong-svc/pings
           ports:
             - name: http
               containerPort: 3000
               protocol: TCP
           volumeMounts:
-            - name: shared-data
+            - name: shared-log
               mountPath: /usr/src/app/files
               readOnly: true
