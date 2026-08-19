@@ -5,6 +5,10 @@ The image is downloaded on demand and cached in a PersistentVolume for ten
 minutes. Because the cache is stored outside the container, a Pod restart does
 not cause another download while the image is still fresh.
 
+The page also contains a new-todo input limited to 140 characters, a send
+button, and a list of hardcoded todos. Sending data will be implemented in a
+later exercise.
+
 If refreshing an expired image fails, the server continues serving the stale
 cached image. Concurrent requests are protected by a process-local lock, and a
 new download atomically replaces the old file.
@@ -32,8 +36,8 @@ Run the commands from the repository root. They assume a k3d cluster named
 Build the image and import it into the cluster:
 
 ```bash
-docker build -t todo-app:1.12 ./the_project/todo-app
-k3d image import todo-app:1.12 --cluster k3s-default
+docker build -t todo-app:1.13 ./the_project/todo-app
+k3d image import todo-app:1.13 --cluster k3s-default
 ```
 
 Create the local backing directory, storage resources, Deployment, Service, and

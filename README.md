@@ -16,3 +16,4 @@ Exercise submissions for the [DevOps with Kubernetes](https://devopswithkubernet
 - [1.10](https://github.com/LineGM/devops_with_kubernetes/tree/1.10/log_output): Even more services
 - [1.11](https://github.com/LineGM/devops_with_kubernetes/tree/1.11/log_output): Persisting data
 - [1.12](https://github.com/LineGM/devops_with_kubernetes/tree/1.12/the_project): The project, step 6
+- [1.13](https://github.com/LineGM/devops_with_kubernetes/tree/1.13/the_project): The project, step 7

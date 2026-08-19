@@ -37,23 +37,97 @@ TODO_PAGE = b"""<!doctype html>
         text-align: center;
       }
       h1 { margin: 0 0 2rem; font-size: clamp(2.5rem, 7vw, 4rem); }
-      img {
+      .hero-image {
         display: block;
-        width: 100%;
-        max-height: 760px;
+        width: min(100%, 600px);
+        aspect-ratio: 1;
+        margin: 0 auto;
         object-fit: cover;
         border-radius: 1rem;
         background: #e3e6eb;
         box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.14);
       }
-      p { margin: 2rem 0 0; color: #666; font-size: 1.4rem; }
+      .todo-form {
+        display: flex;
+        gap: 0.75rem;
+        margin: 3rem 0;
+      }
+      .todo-form input {
+        min-width: 0;
+        flex: 1;
+        padding: 0.9rem 1rem;
+        border: 2px solid #45ad55;
+        border-radius: 0.5rem;
+        font: inherit;
+        font-size: 1.1rem;
+      }
+      .todo-form input:focus {
+        outline: 3px solid rgba(69, 173, 85, 0.22);
+        outline-offset: 1px;
+      }
+      .todo-form button {
+        padding: 0.9rem 1.5rem;
+        border: 0;
+        border-radius: 0.5rem;
+        color: white;
+        background: #45ad55;
+        font: inherit;
+        font-size: 1.1rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .todo-form button:hover { background: #338c41; }
+      .todos h2 { font-size: 2rem; }
+      .todo-list {
+        display: grid;
+        gap: 0.75rem;
+        margin: 1.5rem 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .todo-list li {
+        padding: 1rem 1.25rem;
+        border-left: 0.4rem solid #45ad55;
+        border-radius: 0.35rem;
+        background: white;
+        box-shadow: 0 0.25rem 0.8rem rgba(0, 0, 0, 0.08);
+        text-align: left;
+        font-size: 1.1rem;
+      }
+      footer { margin: 2.5rem 0 0; color: #666; font-size: 1.1rem; }
+      @media (max-width: 560px) {
+        .todo-form { flex-direction: column; }
+        .todo-form button { width: 100%; }
+      }
     </style>
   </head>
   <body>
     <main>
       <h1>Todo App</h1>
-      <img src="/image" alt="A random landscape from Lorem Picsum">
-      <p>DevOps with Kubernetes 2026</p>
+      <img class="hero-image" src="/image" alt="A random landscape from Lorem Picsum">
+
+      <form class="todo-form" onsubmit="return false;">
+        <input
+          type="text"
+          name="todo"
+          maxlength="140"
+          placeholder="Enter a new todo (max 140 characters)"
+          aria-label="New todo"
+          required
+        >
+        <button type="submit">Send</button>
+      </form>
+
+      <section class="todos" aria-labelledby="todos-title">
+        <h2 id="todos-title">Todos</h2>
+        <ul class="todo-list">
+          <li>Learn Kubernetes basics</li>
+          <li>Deploy the Todo App to the cluster</li>
+          <li>Configure persistent volumes</li>
+        </ul>
+      </section>
+
+      <footer>DevOps with Kubernetes 2026</footer>
     </main>
   </body>
 </html>
@@ -133,7 +207,7 @@ class ImageCache:
         request_url = f"{self.source_url}{separator}cache_bust={time.time_ns()}"
         request = Request(
             request_url,
-            headers={"Accept": "image/*", "User-Agent": "todo-app/1.12"},
+            headers={"Accept": "image/*", "User-Agent": "todo-app/1.13"},
         )
 
         with urlopen(request, timeout=30) as response:
