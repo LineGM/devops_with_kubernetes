@@ -2,9 +2,25 @@
 
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 
 DEFAULT_PORT = 3000
+TODO_PAGE = b"""<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Todo app</title>
+  </head>
+  <body>
+    <main>
+      <h1>Todo app</h1>
+      <p>The todo application is running.</p>
+    </main>
+  </body>
+</html>
+"""
 
 
 def configured_port() -> int:
@@ -23,15 +39,18 @@ def configured_port() -> int:
 
 
 class TodoRequestHandler(BaseHTTPRequestHandler):
-    """Serve a placeholder page until the todo UI is implemented."""
+    """Serve the first version of the todo application page."""
 
     def do_GET(self) -> None:
-        body = b"Todo app\n"
+        if urlsplit(self.path).path != "/":
+            self.send_error(404, "Not Found")
+            return
+
         self.send_response(200)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(TODO_PAGE)))
         self.end_headers()
-        self.wfile.write(body)
+        self.wfile.write(TODO_PAGE)
 
     def log_message(self, format: str, *args: object) -> None:
         """Write request logs to stdout so Kubernetes can collect them."""

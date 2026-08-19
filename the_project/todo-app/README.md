@@ -30,8 +30,8 @@ named `k3s-default` are available.
 Build the image and import it into the cluster:
 
 ```bash
-docker build -t todo-app:1.4 .
-k3d image import todo-app:1.4 --cluster k3s-default
+docker build -t todo-app:1.5 .
+k3d image import todo-app:1.5 --cluster k3s-default
 ```
 
 Create the Deployment and wait for its Pod:
@@ -47,8 +47,15 @@ Confirm that the configured port was used:
 kubectl logs deployment/todo-app
 ```
 
-The application is not exposed outside the cluster yet; a Kubernetes Service
-will be added in a later exercise.
+Forward local port `3003` to the application's port inside the cluster:
+
+```bash
+kubectl port-forward deployment/todo-app 3003:3000
+```
+
+Open <http://localhost:3003> in a browser. Stop port forwarding with `Ctrl+C`.
+Port forwarding is intended for local development and debugging; the
+application is not exposed through a Kubernetes Service yet.
 
 Remove the Deployment when it is no longer needed:
 
