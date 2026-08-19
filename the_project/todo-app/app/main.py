@@ -77,6 +77,12 @@ TODO_PAGE = b"""<!doctype html>
         cursor: pointer;
       }
       .todo-form button:hover { background: #338c41; }
+      .todo-form button:disabled { cursor: wait; opacity: 0.65; }
+      .form-status {
+        min-height: 1.5rem;
+        margin: -2rem 0 2rem;
+        color: #a12222;
+      }
       .todos h2 { font-size: 2rem; }
       .todo-list {
         display: grid;
@@ -106,8 +112,9 @@ TODO_PAGE = b"""<!doctype html>
       <h1>Todo App</h1>
       <img class="hero-image" src="/image" alt="A random landscape from Lorem Picsum">
 
-      <form class="todo-form" onsubmit="return false;">
+      <form class="todo-form" id="todo-form">
         <input
+          id="todo-input"
           type="text"
           name="todo"
           maxlength="140"
@@ -117,18 +124,73 @@ TODO_PAGE = b"""<!doctype html>
         >
         <button type="submit">Send</button>
       </form>
+      <p class="form-status" id="form-status" role="status"></p>
 
       <section class="todos" aria-labelledby="todos-title">
         <h2 id="todos-title">Todos</h2>
-        <ul class="todo-list">
-          <li>Learn Kubernetes basics</li>
-          <li>Deploy the Todo App to the cluster</li>
-          <li>Configure persistent volumes</li>
-        </ul>
+        <ul class="todo-list" id="todo-list"><li>Loading todos...</li></ul>
       </section>
 
       <footer>DevOps with Kubernetes 2026</footer>
     </main>
+    <script>
+      const form = document.querySelector("#todo-form");
+      const input = document.querySelector("#todo-input");
+      const list = document.querySelector("#todo-list");
+      const status = document.querySelector("#form-status");
+      const button = form.querySelector("button");
+
+      function showTodos(todos) {
+        list.replaceChildren();
+        for (const todo of todos) {
+          const item = document.createElement("li");
+          item.textContent = todo.content;
+          list.append(item);
+        }
+      }
+
+      async function loadTodos() {
+        try {
+          const response = await fetch("/todos");
+          if (!response.ok) throw new Error("Could not load todos");
+          const todos = await response.json();
+          if (!Array.isArray(todos)) throw new Error("Invalid todo response");
+          showTodos(todos);
+        } catch (error) {
+          status.textContent = error.message;
+        }
+      }
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const content = input.value.trim();
+
+        if (!content || content.length > 140) {
+          status.textContent = "Todo must contain between 1 and 140 characters.";
+          return;
+        }
+
+        button.disabled = true;
+        status.textContent = "";
+        try {
+          const response = await fetch("/todos", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content }),
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || "Could not create todo");
+          input.value = "";
+          await loadTodos();
+        } catch (error) {
+          status.textContent = error.message;
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      loadTodos();
+    </script>
   </body>
 </html>
 """
@@ -207,7 +269,7 @@ class ImageCache:
         request_url = f"{self.source_url}{separator}cache_bust={time.time_ns()}"
         request = Request(
             request_url,
-            headers={"Accept": "image/*", "User-Agent": "todo-app/1.13"},
+            headers={"Accept": "image/*", "User-Agent": "todo-app/2.2"},
         )
 
         with urlopen(request, timeout=30) as response:

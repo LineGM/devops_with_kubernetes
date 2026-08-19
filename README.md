@@ -18,3 +18,4 @@ Exercise submissions for the [DevOps with Kubernetes](https://devopswithkubernet
 - [1.12](https://github.com/LineGM/devops_with_kubernetes/tree/1.12/the_project): The project, step 6
 - [1.13](https://github.com/LineGM/devops_with_kubernetes/tree/1.13/the_project): The project, step 7
 - [2.1](https://github.com/LineGM/devops_with_kubernetes/tree/2.1/log_output): Connecting pods
+- [2.2](https://github.com/LineGM/devops_with_kubernetes/tree/2.2/the_project): The project, step 8

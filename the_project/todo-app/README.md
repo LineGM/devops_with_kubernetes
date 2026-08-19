@@ -1,46 +1,46 @@
 # Todo app
 
-The course Todo App serves an HTML page and a random image from Lorem Picsum.
-The image is downloaded on demand and cached in a PersistentVolume for ten
-minutes. Because the cache is stored outside the container, a Pod restart does
-not cause another download while the image is still fresh.
+Todo App serves the course project's HTML and JavaScript frontend. The browser
+loads todos from `GET /todos` and submits new items to `POST /todos`; Ingress
+routes those requests to the separate Todo backend service. The input and the
+backend both enforce a maximum length of 140 characters.
 
-The page also contains a new-todo input limited to 140 characters, a send
-button, and a list of hardcoded todos. Sending data will be implemented in a
-later exercise.
-
-If refreshing an expired image fails, the server continues serving the stale
-cached image. Concurrent requests are protected by a process-local lock, and a
-new download atomically replaces the old file.
+The application also downloads a random image from Lorem Picsum and caches it
+in a PersistentVolume for ten minutes. A Pod restart therefore does not trigger
+another download while the image is still fresh.
 
 ## Run locally
 
-Python 3.11 or newer is recommended. The application has no third-party
-dependencies.
+Python 3.11 or newer is recommended. Start the backend and frontend in separate
+terminals:
+
+```bash
+PORT=3001 python3 ../todo-backend/app/main.py
+```
 
 ```bash
 mkdir -p files
 IMAGE_CACHE_FILE="$PWD/files/image.jpg" PORT=8080 python3 app/main.py
 ```
 
-Open <http://localhost:8080> and stop the server with `Ctrl+C`.
-
-The cache lifetime defaults to 600 seconds and can be configured with
-`IMAGE_CACHE_MAX_AGE_SECONDS`.
+For a fully working local browser UI, use a reverse proxy that routes `/todos`
+to port `3001`, or test the API directly. Kubernetes Ingress provides this
+routing in the cluster.
 
 ## Deploy to a local k3d cluster
 
 Run the commands from the repository root. They assume a k3d cluster named
 `k3s-default` whose host port `8081` is mapped to port `80` of its load balancer.
 
-Build the image and import it into the cluster:
+Build and import both application images:
 
 ```bash
-docker build -t todo-app:1.13 ./the_project/todo-app
-k3d image import todo-app:1.13 --cluster k3s-default
+docker build -t todo-app:2.2 ./the_project/todo-app
+docker build -t todo-backend:2.2 ./the_project/todo-backend
+k3d image import todo-app:2.2 todo-backend:2.2 --cluster k3s-default
 ```
 
-Create the local backing directory, storage resources, Deployment, Service, and
+Create the image cache storage, deploy both services, and activate the project
 Ingress:
 
 ```bash
@@ -48,30 +48,20 @@ docker exec k3d-k3s-default-agent-0 mkdir -p /tmp/todo-image
 kubectl apply -f the_project/manifests/persistentvolume.yaml
 kubectl apply -f the_project/manifests/persistentvolumeclaim.yaml
 kubectl apply -f the_project/todo-app/manifests/
+kubectl apply -f the_project/todo-backend/manifests/
 kubectl delete ingress log-output-ingress --ignore-not-found
 kubectl apply -f the_project/manifests/ingress.yaml
 kubectl rollout status deployment/todo-app
+kubectl rollout status deployment/todo-backend
 ```
 
-The old Log output Ingress is removed because both it and the project use the
-same catch-all `/` path. Open <http://localhost:8081> to view the application.
+Open <http://localhost:8081>. The form creates todos through the backend, and
+the refreshed list is rendered without reloading the page.
 
-Verify that the claim is bound and inspect application logs with:
-
-```bash
-kubectl get pv todo-image-pv
-kubectl get pvc todo-image-claim
-kubectl logs deployment/todo-app
-```
-
-To verify persistence, request `/image`, recreate the Pod, and request the image
-again. Its checksum should remain unchanged while the cached file is younger
-than ten minutes:
+The API can also be verified directly through Ingress:
 
 ```bash
-curl --output /tmp/image-before.jpg http://localhost:8081/image
-kubectl delete pod -l app=todo-app
-kubectl wait --for=condition=Ready pod -l app=todo-app --timeout=120s
-curl --output /tmp/image-after.jpg http://localhost:8081/image
-sha256sum /tmp/image-before.jpg /tmp/image-after.jpg
+curl http://localhost:8081/todos
+curl --json '{"content":"Learn Kubernetes Services"}' \
+  http://localhost:8081/todos
 ```
