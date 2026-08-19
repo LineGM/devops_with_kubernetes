@@ -50,12 +50,13 @@ Apply both applications and switch the catch-all Ingress from the course
 project back to Log output:
 
 ```bash
+kubectl apply -f namespaces/exercises.yaml
 kubectl apply -f ping_pong/manifests/
 kubectl apply -f log_output/manifests/
-kubectl delete ingress todo-app-ingress --ignore-not-found
+kubectl delete ingress todo-app-ingress -n default --ignore-not-found
 kubectl apply -f log_output/manifests/ingress.yaml
-kubectl rollout status deployment/ping-pong
-kubectl rollout status deployment/log-output
+kubectl rollout status deployment/ping-pong -n exercises
+kubectl rollout status deployment/log-output -n exercises
 ```
 
 Test the public endpoints through the shared Ingress:
@@ -76,6 +77,6 @@ The internal endpoint can be tested from the reader container using the
 Service's DNS name:
 
 ```bash
-kubectl exec deployment/log-output -c log-reader -- \
+kubectl exec deployment/log-output -n exercises -c log-reader -- \
   python -c "from urllib.request import urlopen; print(urlopen('http://ping-pong-svc/pings').read().decode())"
 ```

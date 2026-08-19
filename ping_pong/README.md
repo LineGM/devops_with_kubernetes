@@ -29,10 +29,13 @@ Run these commands from the repository root:
 ```bash
 docker build -t ping-pong:2.1 ./ping_pong
 k3d image import ping-pong:2.1 --cluster k3s-default
+kubectl apply -f namespaces/exercises.yaml
 kubectl apply -f ping_pong/manifests/
-kubectl rollout status deployment/ping-pong
+kubectl rollout status deployment/ping-pong -n exercises
 ```
 
 The Ingress stored with Log output routes `/pingpong` to this application and
 `/` to Log output. The `/pings` endpoint is intended for internal communication
 through `ping-pong-svc`.
+
+All Ping-pong resources are kept in the `exercises` namespace.
