@@ -1,30 +1,42 @@
 # Log output
 
-The application generates a UUID once at startup and prints that same value with
-a new UTC timestamp every five seconds. It also serves the current timestamp and
-the same UUID over HTTP.
+Log output runs as two containers in one Pod. The writer generates a UUID once
+at startup and appends that value with a fresh UTC timestamp to a shared file
+every five seconds. The reader serves the current file contents over HTTP. An
+`emptyDir` volume makes the file visible to both containers for the lifetime of
+the Pod.
 
 ## Run locally
 
-Python 3.11 or newer is recommended. The application has no third-party
-dependencies.
+Python 3.11 or newer is recommended. The applications have no third-party
+dependencies. Start the writer and reader in separate terminals with the same
+file path:
 
 ```bash
-python3 app/main.py
+mkdir -p files
+LOG_FILE="$PWD/files/log.txt" python3 writer/main.py
 ```
 
-Stop it with `Ctrl+C`.
+```bash
+LOG_FILE="$PWD/files/log.txt" PORT=3000 python3 reader/main.py
+```
+
+Open <http://localhost:3000> and stop both processes with `Ctrl+C`.
 
 ## Deploy to a local k3d cluster
 
 The commands below assume that Docker, kubectl, k3d, and a running k3d cluster
 named `k3s-default` are available.
 
-Build the image and import it into the cluster:
+Build both images and import them into the cluster:
 
 ```bash
-docker build -t log-output:1.7 .
-k3d image import log-output:1.7 --cluster k3s-default
+docker build -f Dockerfile.writer -t log-output-writer:1.10 .
+docker build -f Dockerfile.reader -t log-output-reader:1.10 .
+k3d image import \
+  log-output-writer:1.10 \
+  log-output-reader:1.10 \
+  --cluster k3s-default
 ```
 
 Create the Deployment, ClusterIP Service, and shared Ingress, then wait for the
@@ -38,7 +50,8 @@ kubectl rollout status deployment/log-output
 Confirm that the application is running:
 
 ```bash
-kubectl logs -f deployment/log-output
+kubectl logs -f deployment/log-output -c log-writer
+kubectl logs -f deployment/log-output -c log-reader
 ```
 
 The output should look like this; the UUID remains unchanged until the

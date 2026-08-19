@@ -1,20 +1,13 @@
-"""Log and serve one startup-generated UUID with fresh UTC timestamps."""
+"""Serve the contents of the shared Log output file over HTTP."""
 
 import os
-import threading
-import time
-import uuid
-from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import urlsplit
 
 
 DEFAULT_PORT = 3000
-
-
-def utc_timestamp() -> str:
-    """Return an ISO 8601 UTC timestamp with millisecond precision."""
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+DEFAULT_LOG_FILE = "/usr/src/app/files/log.txt"
 
 
 def configured_port() -> int:
@@ -32,24 +25,21 @@ def configured_port() -> int:
     return port
 
 
-def emit_log_messages(random_string: str) -> None:
-    """Write the current timestamp and startup UUID every five seconds."""
-    while True:
-        print(f"{utc_timestamp()}: {random_string}", flush=True)
-        time.sleep(5)
+class LogRequestHandler(BaseHTTPRequestHandler):
+    """Return the contents of the file written by the companion container."""
 
-
-class StatusRequestHandler(BaseHTTPRequestHandler):
-    """Return the current timestamp and process-specific UUID."""
-
-    random_string = ""
+    log_file = Path(DEFAULT_LOG_FILE)
 
     def do_GET(self) -> None:
         if urlsplit(self.path).path != "/":
             self.send_error(404, "Not Found")
             return
 
-        body = f"{utc_timestamp()}: {self.random_string}\n".encode()
+        try:
+            body = self.log_file.read_bytes()
+        except FileNotFoundError:
+            body = b"Log output is not available yet.\n"
+
         self.send_response(200)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -62,17 +52,10 @@ class StatusRequestHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    random_string = str(uuid.uuid4())
     port = configured_port()
-    StatusRequestHandler.random_string = random_string
-    server = ThreadingHTTPServer(("0.0.0.0", port), StatusRequestHandler)
-    logger = threading.Thread(
-        target=emit_log_messages,
-        args=(random_string,),
-        daemon=True,
-        name="periodic-logger",
-    )
-    logger.start()
+    LogRequestHandler.log_file = Path(os.getenv("LOG_FILE", DEFAULT_LOG_FILE))
+    server = ThreadingHTTPServer(("0.0.0.0", port), LogRequestHandler)
+    print(f"Server started in port {port}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
