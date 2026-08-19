@@ -1,16 +1,19 @@
-"""In-memory HTTP API for the course Todo application."""
+"""PostgreSQL-backed HTTP API for the course Todo application."""
 
 import json
 import os
-import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
+import psycopg
+from psycopg import sql
+
 
 INITIAL_TODOS = (
-    {"id": 1, "content": "Learn Kubernetes basics"},
-    {"id": 2, "content": "Deploy the Todo App to the cluster"},
-    {"id": 3, "content": "Configure persistent volumes"},
+    "Learn Kubernetes basics",
+    "Deploy the Todo App to the cluster",
+    "Configure persistent volumes",
 )
 
 
@@ -27,7 +30,6 @@ def configured_int(
 ) -> int:
     """Read and validate a required integer environment variable."""
     raw_value = required_env(name)
-
     try:
         value = int(raw_value)
     except ValueError as error:
@@ -38,16 +40,97 @@ def configured_int(
         if maximum is not None:
             expected = f"between {minimum} and {maximum}"
         raise SystemExit(f"{name} must be {expected}")
-
     return value
 
 
-class TodoRequestHandler(BaseHTTPRequestHandler):
-    """Expose the in-memory todo collection as a JSON API."""
+def configured_float(name: str, *, minimum: float) -> float:
+    """Read and validate a required floating-point environment variable."""
+    raw_value = required_env(name)
+    try:
+        value = float(raw_value)
+    except ValueError as error:
+        raise SystemExit(f"{name} must be a number, got {raw_value!r}") from error
 
-    todos = [dict(todo) for todo in INITIAL_TODOS]
-    next_id = len(todos) + 1
-    todos_lock = threading.Lock()
+    if value < minimum:
+        raise SystemExit(f"{name} must be at least {minimum}")
+    return value
+
+
+class TodoStore:
+    """Persist and retrieve todos in PostgreSQL."""
+
+    def __init__(
+        self,
+        connection_options: dict[str, object],
+        max_todo_length: int,
+    ) -> None:
+        self.connection_options = connection_options
+        self.max_todo_length = max_todo_length
+
+    def initialize(self, retries: int, retry_delay: float) -> None:
+        """Create and seed the table, retrying while PostgreSQL starts."""
+        for attempt in range(1, retries + 1):
+            try:
+                with psycopg.connect(**self.connection_options) as connection:
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            sql.SQL(
+                                """
+                                CREATE TABLE IF NOT EXISTS todos (
+                                    id BIGSERIAL PRIMARY KEY,
+                                    content TEXT NOT NULL CHECK (
+                                        char_length(content) BETWEEN 1 AND {}
+                                    )
+                                )
+                                """
+                            ).format(sql.Literal(self.max_todo_length))
+                        )
+                        cursor.execute("SELECT EXISTS (SELECT 1 FROM todos)")
+                        has_todos = bool(cursor.fetchone()[0])
+                        if not has_todos:
+                            cursor.executemany(
+                                "INSERT INTO todos (content) VALUES (%s)",
+                                ((content,) for content in INITIAL_TODOS),
+                            )
+                return
+            except psycopg.OperationalError as error:
+                if attempt == retries:
+                    raise SystemExit(
+                        f"PostgreSQL unavailable after {retries} attempts: {error}"
+                    ) from error
+                print(
+                    f"PostgreSQL is not ready (attempt {attempt}/{retries}); "
+                    f"retrying in {retry_delay:g} seconds",
+                    flush=True,
+                )
+                time.sleep(retry_delay)
+
+    def list_todos(self) -> list[dict[str, object]]:
+        """Return all todos ordered by their persistent IDs."""
+        with psycopg.connect(**self.connection_options) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT id, content FROM todos ORDER BY id")
+                rows = cursor.fetchall()
+        return [{"id": int(row[0]), "content": str(row[1])} for row in rows]
+
+    def create_todo(self, content: str) -> dict[str, object]:
+        """Insert a todo and return its generated ID and content."""
+        with psycopg.connect(**self.connection_options) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "INSERT INTO todos (content) VALUES (%s) RETURNING id",
+                    (content,),
+                )
+                row = cursor.fetchone()
+        if row is None:
+            raise RuntimeError("PostgreSQL did not return a todo ID")
+        return {"id": int(row[0]), "content": content}
+
+
+class TodoRequestHandler(BaseHTTPRequestHandler):
+    """Expose the PostgreSQL todo collection as a JSON API."""
+
+    todo_store: TodoStore
     todos_path: str
     max_todo_length: int
     max_request_bytes: int
@@ -57,8 +140,12 @@ class TodoRequestHandler(BaseHTTPRequestHandler):
             self.send_json({"error": "Not found"}, status=404)
             return
 
-        with self.todos_lock:
-            todos = [dict(todo) for todo in self.todos]
+        try:
+            todos = self.todo_store.list_todos()
+        except psycopg.Error as error:
+            print(f"Database operation failed: {error}", flush=True)
+            self.send_json({"error": "Database is temporarily unavailable"}, status=503)
+            return
         self.send_json(todos)
 
     def do_POST(self) -> None:
@@ -90,10 +177,12 @@ class TodoRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
-        with self.todos_lock:
-            todo = {"id": self.next_id, "content": content}
-            type(self).next_id += 1
-            self.todos.append(todo)
+        try:
+            todo = self.todo_store.create_todo(content)
+        except (psycopg.Error, RuntimeError) as error:
+            print(f"Database operation failed: {error}", flush=True)
+            self.send_json({"error": "Database is temporarily unavailable"}, status=503)
+            return
 
         print(f"Created todo {todo['id']}: {content}", flush=True)
         self.send_json(todo, status=201)
@@ -144,15 +233,32 @@ class TodoRequestHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    host = required_env("HOST")
-    port = configured_int("PORT", minimum=1, maximum=65535)
-    TodoRequestHandler.todos_path = required_env("TODOS_PATH")
-    TodoRequestHandler.max_todo_length = configured_int(
-        "MAX_TODO_LENGTH", minimum=1
+    max_todo_length = configured_int("MAX_TODO_LENGTH", minimum=1)
+    connection_options: dict[str, object] = {
+        "host": required_env("DB_HOST"),
+        "port": configured_int("DB_PORT", minimum=1, maximum=65535),
+        "dbname": required_env("DB_NAME"),
+        "user": required_env("DB_USER"),
+        "password": required_env("DB_PASSWORD"),
+        "connect_timeout": configured_int(
+            "DB_CONNECT_TIMEOUT_SECONDS", minimum=1
+        ),
+    }
+    store = TodoStore(connection_options, max_todo_length)
+    store.initialize(
+        retries=configured_int("DB_CONNECT_RETRIES", minimum=1),
+        retry_delay=configured_float("DB_CONNECT_RETRY_DELAY_SECONDS", minimum=0),
     )
+
+    TodoRequestHandler.todo_store = store
+    TodoRequestHandler.todos_path = required_env("TODOS_PATH")
+    TodoRequestHandler.max_todo_length = max_todo_length
     TodoRequestHandler.max_request_bytes = configured_int(
         "MAX_REQUEST_BYTES", minimum=1
     )
+
+    host = required_env("HOST")
+    port = configured_int("PORT", minimum=1, maximum=65535)
     server = ThreadingHTTPServer((host, port), TodoRequestHandler)
     print(f"Server started in port {port}", flush=True)
     try:

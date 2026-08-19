@@ -19,11 +19,20 @@ Python 3.11 or newer is recommended. Start the backend and frontend in separate
 terminals:
 
 ```bash
+python3 -m pip install -r ../todo-backend/requirements.txt
 HOST=127.0.0.1 \
 PORT=3001 \
 TODOS_PATH=/todos \
 MAX_TODO_LENGTH=140 \
 MAX_REQUEST_BYTES=4096 \
+DB_HOST=127.0.0.1 \
+DB_PORT=5432 \
+DB_NAME=todos \
+DB_USER=todo \
+DB_PASSWORD='<your-local-password>' \
+DB_CONNECT_TIMEOUT_SECONDS=5 \
+DB_CONNECT_RETRIES=30 \
+DB_CONNECT_RETRY_DELAY_SECONDS=2 \
 python3 ../todo-backend/app/main.py
 ```
 
@@ -55,9 +64,9 @@ Run the commands from the repository root. They assume a k3d cluster named
 Build and import both application images:
 
 ```bash
-docker build -t todo-app:2.6 ./the_project/todo-app
-docker build -t todo-backend:2.6 ./the_project/todo-backend
-k3d image import todo-app:2.6 todo-backend:2.6 --cluster k3s-default
+docker build -t todo-app:2.8 ./the_project/todo-app
+docker build -t todo-backend:2.8 ./the_project/todo-backend
+k3d image import todo-app:2.8 todo-backend:2.8 --cluster k3s-default
 ```
 
 Create the image cache storage, deploy both services, and activate the project
@@ -82,7 +91,13 @@ kubectl apply -f namespaces/project.yaml
 docker exec k3d-k3s-default-agent-0 mkdir -p /tmp/todo-image
 kubectl apply -f the_project/manifests/persistentvolume.yaml
 kubectl apply -f the_project/manifests/persistentvolumeclaim.yaml
+kubectl create secret generic todo-postgres-secret \
+  --namespace project \
+  --from-literal=POSTGRES_PASSWORD='<choose-a-local-password>' \
+  --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -f the_project/manifests/configmap.yaml
+kubectl apply -f the_project/manifests/postgres.yaml
+kubectl rollout status statefulset/todo-postgres -n project
 kubectl apply -f the_project/todo-app/manifests/
 kubectl apply -f the_project/todo-backend/manifests/
 kubectl delete ingress log-output-ingress -n exercises --ignore-not-found

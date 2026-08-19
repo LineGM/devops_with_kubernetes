@@ -24,3 +24,4 @@ Exercise submissions for the [DevOps with Kubernetes](https://devopswithkubernet
 - [2.5](https://github.com/LineGM/devops_with_kubernetes/tree/2.5/log_output): Documentation and ConfigMaps
 - [2.6](https://github.com/LineGM/devops_with_kubernetes/tree/2.6/the_project): The project, step 10
 - [2.7](https://github.com/LineGM/devops_with_kubernetes/tree/2.7/ping_pong): Stateful applications
+- [2.8](https://github.com/LineGM/devops_with_kubernetes/tree/2.8/the_project): The project, step 11
