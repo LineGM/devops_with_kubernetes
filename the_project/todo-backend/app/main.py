@@ -7,9 +7,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 
-DEFAULT_PORT = 3000
-MAX_TODO_LENGTH = 140
-MAX_REQUEST_BYTES = 4096
 INITIAL_TODOS = (
     {"id": 1, "content": "Learn Kubernetes basics"},
     {"id": 2, "content": "Deploy the Todo App to the cluster"},
@@ -17,19 +14,32 @@ INITIAL_TODOS = (
 )
 
 
-def configured_port() -> int:
-    """Read and validate the listening port from the environment."""
-    raw_port = os.getenv("PORT", str(DEFAULT_PORT))
+def required_env(name: str) -> str:
+    """Return a required non-empty environment variable."""
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        raise SystemExit(f"{name} environment variable is required")
+    return value
+
+
+def configured_int(
+    name: str, *, minimum: int, maximum: int | None = None
+) -> int:
+    """Read and validate a required integer environment variable."""
+    raw_value = required_env(name)
 
     try:
-        port = int(raw_port)
+        value = int(raw_value)
     except ValueError as error:
-        raise SystemExit(f"PORT must be an integer, got {raw_port!r}") from error
+        raise SystemExit(f"{name} must be an integer, got {raw_value!r}") from error
 
-    if not 1 <= port <= 65535:
-        raise SystemExit("PORT must be between 1 and 65535")
+    if value < minimum or maximum is not None and value > maximum:
+        expected = f"at least {minimum}"
+        if maximum is not None:
+            expected = f"between {minimum} and {maximum}"
+        raise SystemExit(f"{name} must be {expected}")
 
-    return port
+    return value
 
 
 class TodoRequestHandler(BaseHTTPRequestHandler):
@@ -38,9 +48,12 @@ class TodoRequestHandler(BaseHTTPRequestHandler):
     todos = [dict(todo) for todo in INITIAL_TODOS]
     next_id = len(todos) + 1
     todos_lock = threading.Lock()
+    todos_path: str
+    max_todo_length: int
+    max_request_bytes: int
 
     def do_GET(self) -> None:
-        if urlsplit(self.path).path != "/todos":
+        if urlsplit(self.path).path != self.todos_path:
             self.send_json({"error": "Not found"}, status=404)
             return
 
@@ -49,7 +62,7 @@ class TodoRequestHandler(BaseHTTPRequestHandler):
         self.send_json(todos)
 
     def do_POST(self) -> None:
-        if urlsplit(self.path).path != "/todos":
+        if urlsplit(self.path).path != self.todos_path:
             self.send_json({"error": "Not found"}, status=404)
             return
 
@@ -66,9 +79,13 @@ class TodoRequestHandler(BaseHTTPRequestHandler):
         if not content:
             self.send_json({"error": "content cannot be empty"}, status=400)
             return
-        if len(content) > MAX_TODO_LENGTH:
+        if len(content) > self.max_todo_length:
             self.send_json(
-                {"error": f"content cannot exceed {MAX_TODO_LENGTH} characters"},
+                {
+                    "error": (
+                        f"content cannot exceed {self.max_todo_length} characters"
+                    )
+                },
                 status=400,
             )
             return
@@ -97,7 +114,7 @@ class TodoRequestHandler(BaseHTTPRequestHandler):
         if content_length < 1:
             self.send_json({"error": "Request body is required"}, status=400)
             return None
-        if content_length > MAX_REQUEST_BYTES:
+        if content_length > self.max_request_bytes:
             self.send_json({"error": "Request body is too large"}, status=413)
             return None
 
@@ -127,8 +144,16 @@ class TodoRequestHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    port = configured_port()
-    server = ThreadingHTTPServer(("0.0.0.0", port), TodoRequestHandler)
+    host = required_env("HOST")
+    port = configured_int("PORT", minimum=1, maximum=65535)
+    TodoRequestHandler.todos_path = required_env("TODOS_PATH")
+    TodoRequestHandler.max_todo_length = configured_int(
+        "MAX_TODO_LENGTH", minimum=1
+    )
+    TodoRequestHandler.max_request_bytes = configured_int(
+        "MAX_REQUEST_BYTES", minimum=1
+    )
+    server = ThreadingHTTPServer((host, port), TodoRequestHandler)
     print(f"Server started in port {port}", flush=True)
     try:
         server.serve_forever()

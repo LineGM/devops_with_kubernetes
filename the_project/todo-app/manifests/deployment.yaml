@@ -21,17 +21,11 @@ spec:
             claimName: todo-image-claim
       containers:
         - name: todo-app
-          image: todo-app:2.2
+          image: todo-app:2.6
           imagePullPolicy: Never
-          env:
-            - name: PORT
-              value: "3000"
-            - name: IMAGE_URL
-              value: https://picsum.photos/1200
-            - name: IMAGE_CACHE_FILE
-              value: /usr/src/app/files/image.jpg
-            - name: IMAGE_CACHE_MAX_AGE_SECONDS
-              value: "600"
+          envFrom:
+            - configMapRef:
+                name: todo-project-config
           ports:
             - name: http
               containerPort: 3000

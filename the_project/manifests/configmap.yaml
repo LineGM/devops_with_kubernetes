@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: todo-project-config
+  namespace: project
+data:
+  HOST: 0.0.0.0
+  PORT: "3000"
+  APP_PATH: /
+  IMAGE_PATH: /image
+  TODOS_PATH: /todos
+  TODO_API_URL: /todos
+  IMAGE_URL: https://picsum.photos/1200
+  IMAGE_CACHE_FILE: /usr/src/app/files/image.jpg
+  IMAGE_CACHE_MAX_AGE_SECONDS: "600"
+  IMAGE_MAX_BYTES: "20971520"
+  IMAGE_DOWNLOAD_TIMEOUT_SECONDS: "30"
+  MAX_TODO_LENGTH: "140"
+  MAX_REQUEST_BYTES: "4096"

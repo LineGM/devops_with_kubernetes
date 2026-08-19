@@ -1,5 +1,7 @@
 """Todo application with a persistent, time-based image cache."""
 
+import html
+import json
 import os
 import threading
 import time
@@ -10,13 +12,7 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 
-DEFAULT_PORT = 3000
-DEFAULT_IMAGE_URL = "https://picsum.photos/1200"
-DEFAULT_IMAGE_FILE = "/usr/src/app/files/image.jpg"
-DEFAULT_CACHE_MAX_AGE_SECONDS = 600
-MAX_IMAGE_BYTES = 20 * 1024 * 1024
-
-TODO_PAGE = b"""<!doctype html>
+TODO_PAGE_TEMPLATE = """<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -110,15 +106,15 @@ TODO_PAGE = b"""<!doctype html>
   <body>
     <main>
       <h1>Todo App</h1>
-      <img class="hero-image" src="/image" alt="A random landscape from Lorem Picsum">
+      <img class="hero-image" src="__IMAGE_PATH__" alt="A random landscape from Lorem Picsum">
 
       <form class="todo-form" id="todo-form">
         <input
           id="todo-input"
           type="text"
           name="todo"
-          maxlength="140"
-          placeholder="Enter a new todo (max 140 characters)"
+          maxlength="__MAX_TODO_LENGTH__"
+          placeholder="Enter a new todo (max __MAX_TODO_LENGTH__ characters)"
           aria-label="New todo"
           required
         >
@@ -139,6 +135,8 @@ TODO_PAGE = b"""<!doctype html>
       const list = document.querySelector("#todo-list");
       const status = document.querySelector("#form-status");
       const button = form.querySelector("button");
+      const todoApiUrl = __TODO_API_URL__;
+      const maxTodoLength = __MAX_TODO_LENGTH__;
 
       function showTodos(todos) {
         list.replaceChildren();
@@ -151,7 +149,7 @@ TODO_PAGE = b"""<!doctype html>
 
       async function loadTodos() {
         try {
-          const response = await fetch("/todos");
+          const response = await fetch(todoApiUrl);
           if (!response.ok) throw new Error("Could not load todos");
           const todos = await response.json();
           if (!Array.isArray(todos)) throw new Error("Invalid todo response");
@@ -165,15 +163,15 @@ TODO_PAGE = b"""<!doctype html>
         event.preventDefault();
         const content = input.value.trim();
 
-        if (!content || content.length > 140) {
-          status.textContent = "Todo must contain between 1 and 140 characters.";
+        if (!content || content.length > maxTodoLength) {
+          status.textContent = `Todo must contain between 1 and ${maxTodoLength} characters.`;
           return;
         }
 
         button.disabled = true;
         status.textContent = "";
         try {
-          const response = await fetch("/todos", {
+          const response = await fetch(todoApiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ content }),
@@ -196,47 +194,64 @@ TODO_PAGE = b"""<!doctype html>
 """
 
 
-def configured_port() -> int:
-    """Read and validate the listening port from the environment."""
-    raw_port = os.getenv("PORT", str(DEFAULT_PORT))
+def required_env(name: str) -> str:
+    """Return a required non-empty environment variable."""
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        raise SystemExit(f"{name} environment variable is required")
+    return value
+
+
+def configured_int(
+    name: str, *, minimum: int, maximum: int | None = None
+) -> int:
+    """Read and validate a required integer environment variable."""
+    raw_value = required_env(name)
 
     try:
-        port = int(raw_port)
+        value = int(raw_value)
     except ValueError as error:
-        raise SystemExit(f"PORT must be an integer, got {raw_port!r}") from error
+        raise SystemExit(f"{name} must be an integer, got {raw_value!r}") from error
 
-    if not 1 <= port <= 65535:
-        raise SystemExit("PORT must be between 1 and 65535")
+    if value < minimum or maximum is not None and value > maximum:
+        expected = f"at least {minimum}"
+        if maximum is not None:
+            expected = f"between {minimum} and {maximum}"
+        raise SystemExit(f"{name} must be {expected}")
 
-    return port
+    return value
 
 
-def configured_cache_max_age() -> int:
-    """Read and validate the image cache lifetime from the environment."""
-    raw_age = os.getenv(
-        "IMAGE_CACHE_MAX_AGE_SECONDS", str(DEFAULT_CACHE_MAX_AGE_SECONDS)
+def configured_page(
+    image_path: str, todo_api_url: str, max_todo_length: int
+) -> bytes:
+    """Render deployment configuration into the browser page."""
+    return (
+        TODO_PAGE_TEMPLATE.replace(
+            "__IMAGE_PATH__", html.escape(image_path, quote=True)
+        )
+        .replace("__TODO_API_URL__", json.dumps(todo_api_url))
+        .replace("__MAX_TODO_LENGTH__", str(max_todo_length))
+        .encode("utf-8")
     )
-
-    try:
-        max_age = int(raw_age)
-    except ValueError as error:
-        raise SystemExit(
-            f"IMAGE_CACHE_MAX_AGE_SECONDS must be an integer, got {raw_age!r}"
-        ) from error
-
-    if max_age < 1:
-        raise SystemExit("IMAGE_CACHE_MAX_AGE_SECONDS must be positive")
-
-    return max_age
 
 
 class ImageCache:
     """Cache a remotely downloaded image in a file for a configured duration."""
 
-    def __init__(self, image_file: Path, source_url: str, max_age: int) -> None:
+    def __init__(
+        self,
+        image_file: Path,
+        source_url: str,
+        max_age: int,
+        max_bytes: int,
+        download_timeout: int,
+    ) -> None:
         self.image_file = image_file
         self.source_url = source_url
         self.max_age = max_age
+        self.max_bytes = max_bytes
+        self.download_timeout = download_timeout
         self.lock = threading.Lock()
 
     def is_fresh(self) -> bool:
@@ -269,19 +284,19 @@ class ImageCache:
         request_url = f"{self.source_url}{separator}cache_bust={time.time_ns()}"
         request = Request(
             request_url,
-            headers={"Accept": "image/*", "User-Agent": "todo-app/2.2"},
+            headers={"Accept": "image/*", "User-Agent": "todo-app/2.6"},
         )
 
-        with urlopen(request, timeout=30) as response:
+        with urlopen(request, timeout=self.download_timeout) as response:
             content_type = response.headers.get_content_type()
             if not content_type.startswith("image/"):
                 raise ValueError(f"Unexpected content type: {content_type}")
 
-            image = response.read(MAX_IMAGE_BYTES + 1)
+            image = response.read(self.max_bytes + 1)
 
         if not image:
             raise ValueError("Downloaded image is empty")
-        if len(image) > MAX_IMAGE_BYTES:
+        if len(image) > self.max_bytes:
             raise ValueError("Downloaded image is too large")
 
         self.image_file.parent.mkdir(parents=True, exist_ok=True)
@@ -295,19 +310,22 @@ class TodoRequestHandler(BaseHTTPRequestHandler):
     """Serve the Todo page and its cached image."""
 
     image_cache: ImageCache
+    app_path: str
+    image_path: str
+    todo_page: bytes
 
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
 
-        if path == "/":
+        if path == self.app_path:
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(TODO_PAGE)))
+            self.send_header("Content-Length", str(len(self.todo_page)))
             self.end_headers()
-            self.wfile.write(TODO_PAGE)
+            self.wfile.write(self.todo_page)
             return
 
-        if path == "/image":
+        if path == self.image_path:
             self.serve_image()
             return
 
@@ -335,16 +353,27 @@ class TodoRequestHandler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    port = configured_port()
-    image_file = Path(os.getenv("IMAGE_CACHE_FILE", DEFAULT_IMAGE_FILE))
-    image_url = os.getenv("IMAGE_URL", DEFAULT_IMAGE_URL)
+    host = required_env("HOST")
+    port = configured_int("PORT", minimum=1, maximum=65535)
+    image_file = Path(required_env("IMAGE_CACHE_FILE"))
+    image_url = required_env("IMAGE_URL")
+    max_todo_length = configured_int("MAX_TODO_LENGTH", minimum=1)
+    TodoRequestHandler.app_path = required_env("APP_PATH")
+    TodoRequestHandler.image_path = required_env("IMAGE_PATH")
+    TodoRequestHandler.todo_page = configured_page(
+        image_path=TodoRequestHandler.image_path,
+        todo_api_url=required_env("TODO_API_URL"),
+        max_todo_length=max_todo_length,
+    )
     TodoRequestHandler.image_cache = ImageCache(
         image_file=image_file,
         source_url=image_url,
-        max_age=configured_cache_max_age(),
+        max_age=configured_int("IMAGE_CACHE_MAX_AGE_SECONDS", minimum=1),
+        max_bytes=configured_int("IMAGE_MAX_BYTES", minimum=1),
+        download_timeout=configured_int("IMAGE_DOWNLOAD_TIMEOUT_SECONDS", minimum=1),
     )
 
-    server = ThreadingHTTPServer(("0.0.0.0", port), TodoRequestHandler)
+    server = ThreadingHTTPServer((host, port), TodoRequestHandler)
     print(f"Server started in port {port}", flush=True)
     try:
         server.serve_forever()
