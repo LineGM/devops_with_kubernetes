@@ -3,6 +3,7 @@
 import json
 import os
 import time
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
@@ -54,6 +55,29 @@ def configured_float(name: str, *, minimum: float) -> float:
     if value < minimum:
         raise SystemExit(f"{name} must be at least {minimum}")
     return value
+
+
+def log_todo_submission(
+    content: object,
+    *,
+    status: str,
+    reason: str,
+    todo_id: int | None = None,
+) -> None:
+    """Write one structured event for every parsed Todo submission."""
+    event = {
+        "timestamp": datetime.now(UTC).isoformat(timespec="milliseconds").replace(
+            "+00:00", "Z"
+        ),
+        "event": "todo_submission",
+        "status": status,
+        "reason": reason,
+        "content": content,
+        "length": len(content) if isinstance(content, str) else None,
+    }
+    if todo_id is not None:
+        event["todo_id"] = todo_id
+    print(json.dumps(event, ensure_ascii=False, separators=(",", ":")), flush=True)
 
 
 class TodoStore:
@@ -159,14 +183,21 @@ class TodoRequestHandler(BaseHTTPRequestHandler):
 
         content = payload.get("content")
         if not isinstance(content, str):
+            log_todo_submission(
+                content,
+                status="rejected",
+                reason="content_not_string",
+            )
             self.send_json({"error": "content must be a string"}, status=400)
             return
 
         content = content.strip()
         if not content:
+            log_todo_submission(content, status="rejected", reason="content_empty")
             self.send_json({"error": "content cannot be empty"}, status=400)
             return
         if len(content) > self.max_todo_length:
+            log_todo_submission(content, status="rejected", reason="content_too_long")
             self.send_json(
                 {
                     "error": (
@@ -181,10 +212,20 @@ class TodoRequestHandler(BaseHTTPRequestHandler):
             todo = self.todo_store.create_todo(content)
         except (psycopg.Error, RuntimeError) as error:
             print(f"Database operation failed: {error}", flush=True)
+            log_todo_submission(
+                content,
+                status="rejected",
+                reason="database_unavailable",
+            )
             self.send_json({"error": "Database is temporarily unavailable"}, status=503)
             return
 
-        print(f"Created todo {todo['id']}: {content}", flush=True)
+        log_todo_submission(
+            content,
+            status="accepted",
+            reason="created",
+            todo_id=int(todo["id"]),
+        )
         self.send_json(todo, status=201)
 
     def read_json_body(self) -> dict[str, object] | None:
@@ -229,6 +270,8 @@ class TodoRequestHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format: str, *args: object) -> None:
         """Write request logs to stdout so Kubernetes can collect them."""
+        if self.headers.get("User-Agent", "").startswith("kube-probe/"):
+            return
         print(f"{self.address_string()} - {format % args}", flush=True)
 
 

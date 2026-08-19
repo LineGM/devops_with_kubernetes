@@ -18,6 +18,10 @@ The Todo generator runs as an hourly CronJob. It follows the redirect from
 Wikipedia's random article endpoint and creates a `Read <URL>` item through the
 internal Todo backend Service.
 
+Todo backend writes a structured `todo_submission` JSON event for every parsed
+creation request, including rejected items. These stdout events are collected
+by the cluster logging stack and can be filtered in Loki through Grafana.
+
 Application code, Kubernetes manifests, and detailed instructions are in
 [`todo-app`](todo-app/), [`todo-backend`](todo-backend/), and
 [`todo-generator`](todo-generator/). Cluster-level storage, configuration, and

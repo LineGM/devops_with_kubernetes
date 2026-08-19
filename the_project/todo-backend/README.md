@@ -6,6 +6,11 @@ Todo backend is a PostgreSQL-backed JSON API for the course project.
 - `POST /todos` accepts `{ "content": "..." }` and creates a todo.
 - Todo content must contain between 1 and 140 characters after trimming.
 
+Every parsed submission is logged as a structured `todo_submission` JSON event.
+The event contains the submitted content, its length, whether it was accepted,
+and the rejection reason. This includes Todo items rejected for exceeding the
+140-character backend limit.
+
 PostgreSQL runs as a one-replica StatefulSet and stores its data in a dynamically
 provisioned `local-path` volume. Todos therefore survive restarts of both the
 backend Deployment and the database Pod.
@@ -42,8 +47,8 @@ curl --json '{"content":"Learn Services"}' http://localhost:3001/todos
 Run the commands from the repository root:
 
 ```bash
-docker build -t todo-backend:2.8 ./the_project/todo-backend
-k3d image import todo-backend:2.8 --cluster k3s-default
+docker build -t todo-backend:2.10 ./the_project/todo-backend
+k3d image import todo-backend:2.10 --cluster k3s-default
 kubectl apply -f namespaces/project.yaml
 kubectl create secret generic todo-postgres-secret \
   --namespace project \
@@ -61,3 +66,19 @@ namespace.
 
 To verify persistence, create a Todo, restart the backend or PostgreSQL
 StatefulSet, and fetch the list again.
+
+To verify request logging and backend validation, submit a value longer than
+140 characters and inspect the log:
+
+```bash
+curl --json '{"content":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}' \
+  http://localhost:8081/todos
+kubectl logs deployment/todo-backend -n project | grep todo_submission
+```
+
+With the course monitoring stack installed, the rejected event is available in
+Grafana's Loki datasource with this LogQL query:
+
+```logql
+{namespace="project"} |= "todo_submission" |= "content_too_long"
+```
