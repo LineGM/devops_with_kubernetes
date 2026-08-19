@@ -1,8 +1,8 @@
 # Todo app
 
-A minimal web server for exercise 1.2 of the DevOps with Kubernetes course. The
-server reads its listening port from the `PORT` environment variable and uses
-port `3000` by default.
+A minimal web server for the DevOps with Kubernetes course project. The server
+reads its listening port from the `PORT` environment variable and uses port
+`3000` by default.
 
 ## Run locally
 
@@ -30,8 +30,8 @@ named `k3s-default` are available.
 Build the image and import it into the cluster:
 
 ```bash
-docker build -t todo-app:1.2 .
-k3d image import todo-app:1.2 --cluster k3s-default
+docker build -t todo-app:1.4 .
+k3d image import todo-app:1.4 --cluster k3s-default
 ```
 
 Create the Deployment and wait for its Pod:
