@@ -27,7 +27,7 @@ docker build -t log-output:1.7 .
 k3d image import log-output:1.7 --cluster k3s-default
 ```
 
-Create the Deployment, ClusterIP Service, and Ingress, then wait for the Pod:
+Create the Deployment and ClusterIP Service, then wait for the Pod:
 
 ```bash
 kubectl apply -f manifests/
@@ -48,9 +48,9 @@ container restarts:
 2020-03-30T12:15:22.705Z: 8523ecb1-c716-4cb6-a044-b9e83bb98e43
 ```
 
-With host port `8081` mapped to the k3d load balancer's port `80`, open
-<http://localhost:8081> in a browser to request the current status through
-Traefik, the Ingress, and the Service.
+The Log output Ingress introduced in exercise 1.7 is temporarily removed in
+exercise 1.8 so that the project can use the root path. The HTTP endpoint remains
+available inside the cluster through `log-output-svc`.
 
 Remove all application resources when they are no longer needed:
 
