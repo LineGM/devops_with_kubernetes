@@ -14,5 +14,12 @@ spec:
     spec:
       containers:
         - name: log-output
-          image: log-output:1.3
+          image: log-output:1.7
           imagePullPolicy: Never
+          env:
+            - name: PORT
+              value: "3000"
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP

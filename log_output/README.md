@@ -1,7 +1,8 @@
 # Log output
 
 The application generates a UUID once at startup and prints that same value with
-a new UTC timestamp every five seconds.
+a new UTC timestamp every five seconds. It also serves the current timestamp and
+the same UUID over HTTP.
 
 ## Run locally
 
@@ -22,14 +23,14 @@ named `k3s-default` are available.
 Build the image and import it into the cluster:
 
 ```bash
-docker build -t log-output:1.3 .
-k3d image import log-output:1.3 --cluster k3s-default
+docker build -t log-output:1.7 .
+k3d image import log-output:1.7 --cluster k3s-default
 ```
 
-Create the Deployment and wait for its Pod:
+Create the Deployment, ClusterIP Service, and Ingress, then wait for the Pod:
 
 ```bash
-kubectl apply -f manifests/deployment.yaml
+kubectl apply -f manifests/
 kubectl rollout status deployment/log-output
 ```
 
@@ -47,10 +48,14 @@ container restarts:
 2020-03-30T12:15:22.705Z: 8523ecb1-c716-4cb6-a044-b9e83bb98e43
 ```
 
-Remove the Deployment when it is no longer needed:
+With host port `8081` mapped to the k3d load balancer's port `80`, open
+<http://localhost:8081> in a browser to request the current status through
+Traefik, the Ingress, and the Service.
+
+Remove all application resources when they are no longer needed:
 
 ```bash
-kubectl delete -f manifests/deployment.yaml
+kubectl delete -f manifests/
 ```
 
 If the cluster has a different name, replace `k3s-default` in the import
