@@ -24,8 +24,10 @@ Run the commands from the repository root:
 ```bash
 docker build -t todo-backend:2.2 ./the_project/todo-backend
 k3d image import todo-backend:2.2 --cluster k3s-default
+kubectl apply -f namespaces/project.yaml
 kubectl apply -f the_project/todo-backend/manifests/
-kubectl rollout status deployment/todo-backend
+kubectl rollout status deployment/todo-backend -n project
 ```
 
-The project Ingress routes `/todos` to `todo-backend-svc`.
+The project Ingress routes `/todos` to `todo-backend-svc` inside the `project`
+namespace.

@@ -20,3 +20,4 @@ Exercise submissions for the [DevOps with Kubernetes](https://devopswithkubernet
 - [2.1](https://github.com/LineGM/devops_with_kubernetes/tree/2.1/log_output): Connecting pods
 - [2.2](https://github.com/LineGM/devops_with_kubernetes/tree/2.2/the_project): The project, step 8
 - [2.3](https://github.com/LineGM/devops_with_kubernetes/tree/2.3/log_output): Keep them separated
+- [2.4](https://github.com/LineGM/devops_with_kubernetes/tree/2.4/the_project): The project, step 9

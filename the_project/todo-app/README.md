@@ -43,16 +43,31 @@ k3d image import todo-app:2.2 todo-backend:2.2 --cluster k3s-default
 Create the image cache storage, deploy both services, and activate the project
 Ingress:
 
+When migrating an existing exercise 2.2 installation from `default`, first
+remove the old namespaced resources and recreate the local PV object. Its
+`Retain` policy leaves `/tmp/todo-image/image.jpg` intact:
+
 ```bash
+kubectl delete deployment todo-app todo-backend -n default --ignore-not-found
+kubectl delete service todo-app-svc todo-backend-svc -n default --ignore-not-found
+kubectl delete ingress todo-app-ingress -n default --ignore-not-found
+kubectl delete pvc todo-image-claim -n default --ignore-not-found
+kubectl delete pv todo-image-pv --ignore-not-found
+```
+
+Then apply the namespace and current manifests:
+
+```bash
+kubectl apply -f namespaces/project.yaml
 docker exec k3d-k3s-default-agent-0 mkdir -p /tmp/todo-image
 kubectl apply -f the_project/manifests/persistentvolume.yaml
 kubectl apply -f the_project/manifests/persistentvolumeclaim.yaml
 kubectl apply -f the_project/todo-app/manifests/
 kubectl apply -f the_project/todo-backend/manifests/
-kubectl delete ingress log-output-ingress --ignore-not-found
+kubectl delete ingress log-output-ingress -n exercises --ignore-not-found
 kubectl apply -f the_project/manifests/ingress.yaml
-kubectl rollout status deployment/todo-app
-kubectl rollout status deployment/todo-backend
+kubectl rollout status deployment/todo-app -n project
+kubectl rollout status deployment/todo-backend -n project
 ```
 
 Open <http://localhost:8081>. The form creates todos through the backend, and
